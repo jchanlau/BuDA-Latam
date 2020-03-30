@@ -314,7 +314,7 @@ function GetSeries(d,country, industry){
     } else {
         data = data;
     };
-    let parseTime = d3.timeParse("%m-%Y");       
+    let parseTime = d3.timeParse("%b-%Y");       
     keys = d3.keys(d[0]);
     keys = keys.slice(7,keys.length);
     medianFirm = []; minFirm = []; maxFirm = []; avgFirm = [];
