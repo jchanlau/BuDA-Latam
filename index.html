@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<head>
+    <meta charset="UTF-8">
+    <title>PD Distributions</title>
+    <script src='https://d3js.org/d3.v5.js'></script>
+    <script src="https://d3js.org/d3-array.v2.min.js"></script>
+</head>
+<br>
+
+<style>
+    path.line {
+        fill: none;
+        stroke: #ffab00;
+        stroke-width: 4;
+        stroke-opacity: 0.8;
+    }
+
+    .raxis line{
+        stroke:  #1b9e77;
+    }
+
+    .raxis path{
+        stroke:  #1b9e77;
+    }
+
+    .raxis text{
+        fill:  #1b9e77;
+        font-size: 12px;
+        font-weight: 400;
+    }
+
+    .laxis line{
+        stroke:  #d95f02;
+    }
+
+    .laxis path{
+        stroke:  #d95f02;
+    }
+
+    .laxis text{
+        fill:  #d95f02;
+        font-size: 12px;
+        font-weight: 400;
+    }
+
+
+</style>
+
+<body>
+
+<!--
+<div id="divFile">
+    <input type="file" id="inputFile" onchange="handleFiles()">
+</div>
+-->
+
+<div id = "divSelection"></div>
+    Country <select id="slCountry" onchange="SelectCountry()"><option>Select country</option></select>
+    Sector <select id="slIndustry" onchange="SelectIndustry()"><option>Select industrial sector</option></select>
+</div>
+
+<div id = "divFirm">  
+Firm <select id="slFirm" onchange="SelectFirm()"><option>Select firms</option></select>
+</div>
+
+<div id = "divChart"></div>
+
+</body>
+
+<script>
+
+//const fileName = handleFiles();
+const fileName = "BuDA_results.csv";
+const dataset = d3.csv(fileName);
+
+function handleFiles(){
+    file = document.getElementById("inputFile").files[0];
+    return file.name;
+};
+
+var margin = {top: 50, right: 100, bottom: 50, left: 100}
+        , width = window.innerWidth - margin.left - margin.right // Use the window's width 
+        , height = 2/3*window.innerHeight - margin.top - margin.bottom; // Use the window's height
+        //, width = 1080
+        //, height = 1080/2;
+
+dataset.then(d => {
+    country=[];
+    industry=[];
+    for (let i =0; i<d.length; i++){
+            country.push(d[i]["Domicile Country"]);
+            industry.push(d[i]["Bloomberg Industry"]);
+        }
+        country = [... new Set(country)].sort(); country.unshift('All'); 
+        industry = [... new Set(industry)].sort(); industry.unshift('All');
+    const countryList = country;
+    const industryList = industry;
+    PopulateMenu('slCountry', countryList);
+    PopulateMenu('slIndustry', industryList);
+});
+
+function PopulateMenu(dropButton, dropList){    
+    let slDrop = document.getElementById(dropButton);
+    slDrop.remove(slDrop.selectedIndex);
+    for (let i = 0; i < dropList.length; i++){
+        let opt = dropList[i];
+        let el = document.createElement("option");
+        el.textContent = opt;
+        el.value = opt;
+        slDrop.appendChild(el);
+    };
+};
+
+var countrySel;
+function SelectCountry(){
+    let e = document.getElementById("slCountry");
+    countrySel = e.options[e.selectedIndex].text;   
+    //console.log(country);
+};
+
+var industrySel;
+var industryFirms;
+var firmMedian;
+var firmAvg;
+function SelectIndustry(){
+    e = document.getElementById("slIndustry");
+    industrySel = e.options[e.selectedIndex].text; 
+    d3.csv(fileName).then( d=>{
+        //industryFirms, medianFirm, avgFirm = GetSeries(d,countrySel, industrySel);
+        GetSeries(d, countrySel, industrySel )
+        console.log(industryFirms);
+        console.log(medianFirm);
+        console.log(avgFirm);
+        firms =[];
+        industryFirms.series.forEach( e => {
+            firms.push(e.name);
+        });
+        firms = [... new Set(firms)].sort(); firms.unshift('All'); 
+        f = document.getElementById('slFirm');
+        f.options.length = 0;
+        for (let i = 0; i < firms.length; i++){
+            let opt = firms[i];
+            let el = document.createElement("option");
+            el.textContent = opt;
+            el.value = opt;
+            f.appendChild(el);
+        };
+    });
+};
+
+var firm;
+
+function CreateSVG(divChart){
+        var svg = d3.select(divChart)
+        .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+        return svg
+    }
+
+var svg = CreateSVG("#divChart");
+
+function SelectFirm(){
+
+    e = document.getElementById("slFirm");
+    firm = e.options[e.selectedIndex].text;   
+    data = industryFirms;
+    console.log(data)
+
+    const x = d3.scaleTime()
+        .domain(d3.extent(data.dates))
+        .range([margin.left, width - margin.right]);
+
+    //data.series.forEach( e => {allValues.push(d3.max(e.values));});
+    // axis for firm series, in the right
+
+    const xaxis = d3.axisBottom()
+        .tickFormat(d3.timeFormat("%b-%y"))
+        .scale(x);
+
+    svg.selectAll('*').remove();
+    
+    const x2 = d3.scaleTime()
+        .domain(d3.extent(firmMedian.dates))
+        .range([margin.left, width - margin.right])
+    
+    seriesPlot = [];
+    for (let i=0; i< firmMedian.dates.length; i++){
+        seriesPlot.push({date: firmMedian.dates[i], val: firmMedian.series[i]});
+    };
+    
+    const xaxis2 = d3.axisBottom()
+        .tickFormat(d3.timeFormat("%b-%y"))
+        .scale(x2);
+
+    yMax = d3.max(firmMedian.series);
+
+    const y2 = d3.scaleLinear()
+        .domain([0, yMax])
+        .range([height, 0]) ;
+
+    const lineMed = d3.line()
+        .x(d => x2(d.date))
+        .y(d => y2(d.val));
+
+    let hplacement = width - 50;
+    var translate = "translate("+hplacement+",0)";
+
+    svg.append("g")
+        .attr("transform", translate)
+        .attr("class", "raxis")
+        .call(d3.axisRight(y2))   
+
+    svg.append("path")
+        .data([seriesPlot])
+        .attr("class", "line")
+        .style("stroke", "#1b9e77")
+        .style("stroke-dasharray", ("3, 3"))
+        .attr("d", lineMed);     
+
+    svg.append("g")
+        .attr("class", "xaxis")
+        .attr("transform", "translate(0," + height + ")")
+        .style("font-size", "10px")
+        .call(xaxis);
+
+    if (firm != "All"){
+        seriesLine = data.series.filter( d=> {return d.name == firm});
+        seriesPlot = [];
+        for (let i=0; i< data.dates.length; i++){
+            seriesPlot.push({date: data.dates[i], val: seriesLine[0].values[i]});
+        };
+
+        yMax = d3.max(seriesPlot, d => d.val);   
+        console.log(seriesPlot) 
+        console.log(yMax);
+
+        var y = d3.scaleLinear()
+            .domain([0, yMax])
+            .range([height, 0]);
+
+        translate = "translate(50,0)";
+        svg.append("g")
+            .attr("transform", translate)
+            .attr("class", "laxis")
+            .call(d3.axisLeft(y))     
+
+        const line = d3.line()
+            .x(d => x(d.date))
+            .y(d => y(d.val));
+
+        svg.append("path")
+            .data([seriesPlot])
+            .attr("class", "line")
+            .style("stroke", "#d95f02")
+//            .style("stroke-dasharray", ("3, 3"))
+            .attr("d", line); 
+
+        } else {
+            for (let i =0; i< data.series.length; i++){
+                seriesLine = data.series[i];
+                console.log(seriesLine);
+                console.log(seriesLine.values);
+                console.log(seriesLine.values[0]);
+                var seriesPlot = [];
+                for (let j=0; j< data.dates.length; j++){
+                    seriesPlot.push({date: data.dates[j], val: seriesLine.values[j]});
+                };
+            };
+        };
+
+    var text = industrySel + " sector, median PD, in bps";
+    svg.append("text")
+        .attr("transform", "rotate(0)")
+        .attr("x", width)
+        .attr("y",-20)
+        .attr("text-anchor", "end")
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "12px")
+        .attr("font-weight", 600)
+        .attr("fill",  "#1b9e77")
+        .text(text);
+
+    var text = firm + " PD, in bps";
+    svg.append("text")
+        .attr("transform", "rotate(0)")
+        .attr("x", 0)
+        .attr("y",-20)
+        .attr("text-anchor", "start")
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "12px")
+        .attr("font-weight", 600)
+        .attr("fill",  "#d95f02")
+        .text(text);
+
+    //yMax = d3.max(data.series, d => d3.max(d.values));
+
+};
+
+function GetSeries(d,country, industry){
+    //file = document.getElementById("inputFile").files[0];
+    var dataset;
+    if (country != "All"){
+        data = d.filter( e => {return e["Domicile Country"] == country});
+    } else {
+        data  = d;
+    };
+    if (industry != "All"){
+        data = data.filter(e => {return e["Bloomberg Industry"] == industry});
+    } else {
+        data = data;
+    };
+    let parseTime = d3.timeParse("%m-%Y");       
+    keys = d3.keys(d[0]);
+    keys = keys.slice(7,keys.length);
+    medianFirm = []; minFirm = []; maxFirm = []; avgFirm = [];
+    dateParse = [];
+    keys.forEach(e => {
+        let crossFirmSection = [];
+        data.forEach(d =>{
+            crossFirmSection.push(+d[e]);
+        });     
+        console.log(e);       
+        parseDate = parseTime(e);
+        dateParse.push(parseDate);
+        medianFirm.push(d3.median(crossFirmSection));
+        //minFirm.push({date: parseDate, values: d3.min(crossFirmSection)});
+        //maxFirm.push({date: parseDate, values: d3.max(crossFirmSection)});
+        avgFirm.push(d3.mean(crossFirmSection));
+        console.log('number firms = ' + crossFirmSection.length); 
+    });
+    
+    firmMedian = {y:"Median", series: medianFirm, dates: dateParse};
+    firmAvg = {y:"Average", series: avgFirm, dates: dateParse};
+    groupFirms = [];
+    for (let i = 0; i < data.length; i++){
+        let firmSeries = [];
+        for (let j = 0; j < keys.length; j++ ){
+            firmSeries.push(+data[i][keys[j]]);
+        }
+        groupFirms.push({name: data[i]["Company Name"], values: firmSeries});
+    };
+    dataset = {y:"PD in bps", series: groupFirms, dates:dateParse};
+    industryFirms = dataset;
+};
+
+
+
+
+</script>
