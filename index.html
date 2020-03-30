@@ -179,7 +179,7 @@ function SelectFirm(){
     // axis for firm series, in the right
 
     const xaxis = d3.axisBottom()
-        .tickFormat(d3.timeFormat("%b-%y"))
+        .tickFormat(d3.timeFormat("%m-%y"))
         .scale(x);
 
     svg.selectAll('*').remove();
